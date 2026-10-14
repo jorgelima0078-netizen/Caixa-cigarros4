@@ -1,0 +1,17 @@
+CAIXA CIGARROS COMPARTILHADO
+
+O que há aqui:
+- index.html: aplicativo com login e vendas compartilhadas pelo Supabase.
+- supabase_migracao.sql: ajuste necessário para a tabela existente.
+- ORIGINAL_BACKUP.html: cópia da versão original; mantenha guardada.
+- manifest.webmanifest, sw.js e ícones: suporte para instalar como aplicativo quando publicado em HTTPS.
+
+IMPORTANTE
+1. Não apague nem desinstale a versão antiga até confirmar que os dados antigos foram exportados e preservados. O app compartilhado começa lendo a tabela Supabase; ele não envia automaticamente as vendas guardadas apenas no navegador antigo.
+2. Antes de testar vendas, execute supabase_migracao.sql uma vez no SQL Editor do projeto Supabase.
+3. Publique todos os arquivos desta pasta em um site HTTPS (por exemplo, GitHub Pages). Não publique a cópia original como index.html.
+4. No celular de cada pessoa, abra o site e entre com o e-mail e a senha do usuário Supabase correspondente. Não compartilhe senhas no chat.
+5. O app exige internet para ler/gravar as vendas compartilhadas.
+6. A chave publishable incluída no HTML é uma chave pública de cliente; a proteção dos dados depende das políticas RLS da tabela. Nunca coloque uma chave secret/service_role no site.
+
+Se a tabela tiver políticas diferentes das criadas para authenticated (SELECT, INSERT e DELETE), corrija-as antes de usar.
