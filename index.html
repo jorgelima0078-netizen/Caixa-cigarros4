@@ -20,7 +20,7 @@ button{font:inherit;cursor:pointer;border:0}button:focus-visible{outline:3px sol
 .greeting{font-size:.86rem;color:#ead8f8;margin-bottom:5px}
 .total-label{font-size:.9rem;color:#f0dfff}.total{font-size:2.7rem;letter-spacing:-.05em;font-weight:800;margin:2px 0 16px;font-variant-numeric:tabular-nums}
 .topstats{display:flex;gap:24px}.topstat span{display:block;font-size:.75rem;color:#e7cef7}.topstat strong{font-size:1rem}
-.nav{display:grid;grid-template-columns:1fr 1fr;gap:8px;background:#eee8f4;padding:5px;border-radius:14px;margin:18px 0}
+.nav{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;background:#eee8f4;padding:5px;border-radius:14px;margin:18px 0}
 .nav button{padding:12px;border-radius:10px;background:transparent;color:#72647f;font-weight:750}
 .nav button.active{background:white;color:var(--purple);box-shadow:0 2px 8px #39134a12}
 .section-title{font-size:1.1rem;font-weight:800;margin:20px 0 12px;letter-spacing:-.02em}
@@ -49,7 +49,7 @@ button{font:inherit;cursor:pointer;border:0}button:focus-visible{outline:3px sol
 .filterrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.filterrow input{flex:1;min-width:145px}
 input{font:inherit;border:1px solid #e1d8e9;border-radius:10px;padding:11px;background:white;color:var(--ink)}
 .metrics{display:grid;grid-template-columns:1fr 1fr;gap:9px}.metric{background:#faf8fc;padding:13px;border-radius:12px}.metric span{font-size:.76rem;color:var(--muted);display:block}.metric strong{display:block;font-size:1.15rem;margin-top:5px}
-.bottomnav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(520px,100%);display:grid;grid-template-columns:1fr 1fr 1fr;background:#fff;border-top:1px solid var(--line);padding:9px 16px max(9px,env(safe-area-inset-bottom));z-index:5}
+.bottomnav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(520px,100%);display:grid;grid-template-columns:repeat(4,1fr);background:#fff;border-top:1px solid var(--line);padding:9px 16px max(9px,env(safe-area-inset-bottom));z-index:5}
 .bottomnav button{background:transparent;color:#94869f;padding:7px;font-size:.75rem;font-weight:750}.bottomnav button span{display:block;font-size:1.2rem;margin-bottom:3px}.bottomnav button.active{color:var(--purple)}
 @media(max-width:360px){.app{padding-left:11px;padding-right:11px}.top{margin-left:-11px;margin-right:-11px}.product{padding:13px 10px}.total{font-size:2.35rem}.topstats{gap:16px}}
 
@@ -92,6 +92,7 @@ input{font:inherit;border:1px solid #e1d8e9;border-radius:10px;padding:11px;back
 <nav class="nav" aria-label="Telas">
  <button class="active" data-view="sell">Vender</button>
  <button data-view="history">Histórico</button>
+ <button data-view="stock">Estoque</button>
 </nav>
 
 <section id="sellView" class="view active">
@@ -153,6 +154,16 @@ input{font:inherit;border:1px solid #e1d8e9;border-radius:10px;padding:11px;back
   <button class="primary" id="exportCsv" style="margin-top:10px">Exportar histórico</button>
  </div>
 </section>
+<section id="stockView" class="view">
+ <div class="section-title">Estoque</div>
+ <p style="color:var(--muted);font-size:.88rem;line-height:1.45">O estoque é compartilhado entre os dois celulares. As quantidades diminuem automaticamente quando uma venda é registrada.</p>
+ <div class="card">
+  <h2>Quantidade disponível</h2>
+  <div id="stockList"></div>
+  <button class="primary" id="saveStock">Salvar quantidades</button>
+ </div>
+ <div class="notice">Maços e unidades de avarejo são controlados separadamente. Ao receber mercadoria, ajuste a quantidade aqui.</div>
+</section>
 <section id="reportView" class="view">
  <div class="section-title">Relatório do dia</div>
  <div class="card">
@@ -182,6 +193,7 @@ input{font:inherit;border:1px solid #e1d8e9;border-radius:10px;padding:11px;back
 <nav class="bottomnav">
  <button class="active" data-view="sell"><span>＋</span>Vender</button>
  <button data-view="history"><span>↻</span>Histórico</button>
+ <button data-view="stock"><span>▦</span>Estoque</button>
  <button data-view="report"><span>▤</span>Relatório PDF</button>
 </nav>
 </div>
@@ -194,14 +206,20 @@ const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const $=id=>document.getElementById(id);
 const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
 const money=n=>Number(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-let sales=[],selected=null,payment='Dinheiro',busy=false;
+let sales=[],stock=[],selected=null,payment='Dinheiro',busy=false;
 $('historyDate').value=today();
 const dateOf=s=>s.date;
 const setStatus=(msg)=>{$('syncStatus').textContent=msg};
 function mapSale(r){const createdAt=r.criado_em||new Date().toISOString();return {id:String(r.id),dbId:r.id,date:r.data_venda||String(createdAt).slice(0,10),createdAt,brand:r.marca||r.produto||'Produto',type:r.tipo||'Maço',qty:Number(r.quantidade||1),unitPrice:Number(r.preco_unitario??r.valor??0),payment:r.pagamento||'Dinheiro',subtotal:Number(r.subtotal??r.valor??0),fee:Number(r.taxa||0),total:Number(r.total??r.valor??0)}}
-async function loadSales(){const {data,error}=await db.from('vendas').select('*').order('criado_em',{ascending:false});if(error)throw error;sales=(data||[]).map(mapSale);render();setStatus('Sincronizado · as vendas aparecem nos dois celulares');}
-async function saveSale(s){const row={produto:s.brand,marca:s.brand,tipo:s.type,quantidade:s.qty,preco_unitario:s.unitPrice,subtotal:s.subtotal,taxa:s.fee,total:s.total,valor:s.total,pagamento:s.payment,data_venda:s.date,criado_em:s.createdAt};const {error}=await db.from('vendas').insert(row);if(error)throw error;await loadSales();}
-async function deleteSale(s){const {error}=await db.from('vendas').delete().eq('id',s.dbId??Number(s.id));if(error)throw error;await loadSales();}
+async function loadSales(){const {data,error}=await db.from('vendas').select('*').order('criado_em',{ascending:false});if(error)throw error;sales=(data||[]).map(mapSale);await loadStock();render();setStatus('Sincronizado · vendas e estoque compartilhados');}
+async function loadStock(){const {data,error}=await db.from('estoque').select('*').order('id');if(error)throw error;stock=data||[];renderStock();}
+function stockKey(brand,type){return brand+'|'+type}
+function stockFor(brand,type){return stock.find(x=>x.marca===brand&&x.tipo===type)}
+function renderStock(){const root=$('stockList');if(!root)return;root.innerHTML='';const items=[['Minister Original','Maço',10],['Global','Maço',8],['Minister Original','Avarejo',60],['Global','Avarejo',40]];items.forEach(([brand,type,initial])=>{const r=stockFor(brand,type);const row=document.createElement('div');row.className='summaryline';row.style.alignItems='center';row.style.gap='10px';const label=document.createElement('div');label.style.flex='1';label.innerHTML='<strong>'+brand+'</strong><div style="font-size:.78rem;color:var(--muted)">'+(type==='Maço'?'Maço':'Avarejo · unidades')+'</div>';const input=document.createElement('input');input.type='number';input.min='0';input.step='1';input.inputMode='numeric';input.dataset.brand=brand;input.dataset.type=type;input.value=r?Number(r.quantidade):initial;input.style.width='100px';input.setAttribute('aria-label',brand+' '+type);row.append(label,input);root.append(row);});}
+async function adjustStock(brand,type,delta){const r=stockFor(brand,type);if(!r)throw new Error('Produto não encontrado no estoque: '+brand+' '+type);const next=Number(r.quantidade)+delta;if(next<0)throw new Error('Estoque insuficiente para '+brand+' ('+type+'). Disponível: '+r.quantidade);const {error}=await db.from('estoque').update({quantidade:next,atualizado_em:new Date().toISOString()}).eq('id',r.id);if(error)throw error;}
+
+async function saveSale(s){const r=stockFor(s.brand,s.type);if(!r)throw new Error('Estoque não configurado. Abra a aba Estoque.');if(Number(r.quantidade)<s.qty)throw new Error('Estoque insuficiente. Disponível: '+r.quantidade);const row={produto:s.brand,marca:s.brand,tipo:s.type,quantidade:s.qty,preco_unitario:s.unitPrice,subtotal:s.subtotal,taxa:s.fee,total:s.total,valor:s.total,pagamento:s.payment,data_venda:s.date,criado_em:s.createdAt};const {error}=await db.from('vendas').insert(row);if(error)throw error;try{await adjustStock(s.brand,s.type,-s.qty)}catch(e){throw new Error('A venda foi registrada, mas não consegui atualizar o estoque: '+e.message)}await loadSales();}
+async function deleteSale(s){const {error}=await db.from('vendas').delete().eq('id',s.dbId??Number(s.id));if(error)throw error;await adjustStock(s.brand,s.type,s.qty);await loadSales();}
 async function startApp(session){$('authScreen').hidden=true;$('mainScreen').hidden=false;$('accountEmail').textContent=session.user.email||'Conectado';setStatus('Carregando vendas compartilhadas…');try{await loadSales()}catch(e){setStatus('Erro ao carregar vendas. Confira a configuração do Supabase.');alert('Não consegui carregar as vendas: '+(e.message||e));}
  if(window.__salesChannel)db.removeChannel(window.__salesChannel);
  window.__salesChannel=db.channel('vendas-compartilhadas').on('postgres_changes',{event:'*',schema:'public',table:'vendas'},()=>loadSales().catch(()=>setStatus('Sem conexão. Tentando sincronizar…'))).subscribe();
@@ -212,7 +230,7 @@ $('logoutButton').addEventListener('click',async()=>{if(window.__salesPoll)clear
 (async()=>{const {data}=await db.auth.getSession();if(data.session)await startApp(data.session)})();
 function go(view){
  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
- const id=view==='sell'?'sellView':view==='checkout'?'checkoutView':view==='report'?'reportView':'historyView';$(id).classList.add('active');
+ const id=view==='sell'?'sellView':view==='checkout'?'checkoutView':view==='report'?'reportView':view==='stock'?'stockView':'historyView';$(id).classList.add('active');
  document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view || (view==='checkout'&&b.dataset.view==='sell')));
  window.scrollTo({top:0,behavior:'instant'});
 }
@@ -288,7 +306,7 @@ function updateCheckout(){
  document.querySelectorAll('[data-payment]').forEach(b=>b.classList.toggle('active',b.dataset.payment===payment));
 }
 document.querySelectorAll('.product').forEach(b=>b.addEventListener('click',()=>{
- selected={brand:b.dataset.product,type:b.dataset.type,price:Number(b.dataset.price)};
+ selected={brand:b.dataset.product,type:b.dataset.type,price:Number(b.dataset.price)};const available=stockFor(selected.brand,selected.type);if(available&&Number(available.quantidade)<=0){alert('Produto sem estoque disponível.');return;}
  $('checkoutName').textContent=selected.brand;$('checkoutType').textContent=selected.type.toUpperCase();
  $('qty').value=1;payment='Dinheiro';updateCheckout();go('checkout');
 }));
@@ -297,6 +315,8 @@ $('qty').addEventListener('input',updateCheckout);
 $('minusQty').addEventListener('click',()=>{$('qty').value=Math.max(1,(Number($('qty').value)||1)-1);updateCheckout()});
 $('plusQty').addEventListener('click',()=>{$('qty').value=Math.max(1,(Number($('qty').value)||1)+1);updateCheckout()});
 $('backToSell').addEventListener('click',()=>go('sell'));
+$('saveStock').addEventListener('click',async()=>{const inputs=[...$('stockList').querySelectorAll('input')];for(const input of inputs){const n=Number(input.value);if(!Number.isSafeInteger(n)||n<0){alert('Informe apenas quantidades inteiras iguais ou maiores que zero.');return}}$('saveStock').disabled=true;try{for(const input of inputs){const r=stockFor(input.dataset.brand,input.dataset.type);if(!r)throw new Error('Não encontrei '+input.dataset.brand+' '+input.dataset.type);const {error}=await db.from('estoque').update({quantidade:Number(input.value),atualizado_em:new Date().toISOString()}).eq('id',r.id);if(error)throw error}await loadStock();alert('Estoque atualizado e compartilhado!')}catch(e){alert('Não foi possível salvar o estoque: '+e.message)}finally{$('saveStock').disabled=false}});
+
 $('confirmSale').addEventListener('click',async()=>{
  if(!selected||busy)return;
  const qty=Math.floor(Number($('qty').value));if(!Number.isSafeInteger(qty)||qty<1){alert('Informe uma quantidade válida.');return}
